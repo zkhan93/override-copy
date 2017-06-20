@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Get Database</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+	</head>
+	<body>
+		<div class="container" id="app">
+			<div class="col-sm-3">
+				<h2>Copy Overrides</h2>
+				<p>{{server}}</p>
+				<p>{{error}}</p>
+				<form action="/copy" method="get">
+					
+					<div class="form-group">
+						<label>Server name</label>
+						<input type="text" class="form-control" name="server" value="{{server}}"/>
+					</div>
+					<div class="form-group">
+						<label>Database name</label>
+						<input type="text" class="form-control" name="database" value="{{database}}"/>
+					</div>
+					<div class="form-group">
+						<label>Source Chart of Account Id</label>
+						<input type="text" class="form-control" name="source_coa" value="{{source_coa}}"/>
+					</div>
+					<div class="form-group">
+						<label>Destination Chart of Account Id</label>
+						<input type="text" class="form-control" name="destination_coa" value="{{', '.join(destination_coas)}}"/>
+					</div>
+					<div class="form-group">
+						<p>**Make sure the description are different**</p>
+						<label>Comma Seperated override Ids</label>
+						<input type="text" class="form-control" name="override_ids" value="{{', '.join(override_ids)}}"/>
+					</div>
+					<div class="radio">
+						<p>**What is unique in destination CoA**</p>
+						<label><input type="radio" name="unique" value="6" checked/> Name</label>
+						<label><input type="radio" name="unique" value="7" /> Description</label>
+					</div>
+					<div class="form-group">
+						<label>Number of copies</label>
+						<input type="number" step="1" min="1" class="form-control" name="num_copy" value="{{num_copy}}"/>
+					</div>
+					<div class="form-group">
+						<button type="submit" class="btn btn-primary">Copy Overrides</button>
+					</div>
+				</form>
+			</div>
+			<div class="col-sm-6">
+				<h3>Chart of accounts</h3>
+				<table id="coa_list" class="table">				
+					<tbody>
+						<tr>
+							<th>Id</th>
+							<th>Name</th>
+							<th>Description</th>
+						</tr>
+					</tbody>
+				<table>
+				<hr/>
+				<h3>Overrides</h3>
+				<table id="override_list" class="table table-condenced">
+					<tr>
+						<th>Id</th>
+						<th>Name</th>
+						<th>Description</th>
+					</tr>
+				<table>
+			</div>
+		</div>
+		<!-- Latest compiled and minified JavaScript -->
+		<script src="https://code.jquery.com/jquery-3.2.1.js" integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE=" crossorigin="anonymous"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+		<!-- <script src="https://unpkg.com/vue"></script> -->
+		<script>
+		/*	var app = new Vue({
+			  el: '#app',
+			  data: {
+				message: 'Hello Vue!'
+			  }
+			});
+		*/
+			var server='';
+			var database='';
+			var listCoa = function(){
+				$.ajax({
+					url: "/coa",
+					data:{
+						'server': server,
+						'database': database
+					},
+					type: 'GET',
+					context: document.body,
+					success: function(result){
+						console.log(result);
+						result = JSON.parse(result);
+						var trs='';
+						if(result.coas){
+							result.coas.forEach(function(data, index){
+								trs += '<tr><td>'+data.id+'</td><td>'+data.name+'</td><td>'+data.desc+'</td></tr>';
+							});
+							$('#coa_list tbody').append(trs);
+						}
+					}
+				});
+				
+			}
+			$("input[name='server']").on('change',function(){
+				//show databases
+				server = $(this).val().trim();
+				console.log(server);
+			});
+			$("input[name='database']").on('focusout',function(){
+				//show databases
+				database = $(this).val().trim();
+				console.log(database);
+				listCoa();
+			});
+			
+		</script>
+	</body>
+</html>
