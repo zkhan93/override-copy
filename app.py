@@ -39,6 +39,20 @@ def get_coa():
 		row = cursor.fetchone()
 	data['coas'] = coas
 	return json.dumps(data)
+
+@app.route('/overrides')
+def get_overrides():
+	global cursor
+	data=dict()
+	data['coa_id'] = request.args.get('coa_id')
+	cursor.execute('select PRGLMappingAccountId, shortname, longname from PRGLMappingAccount where PRGLOverrideMappingId='+data.get('coa_id','-1'))
+	override=[]
+	row=cursor.fetchone()
+	while row:
+		override.append({'id':row[0],'name':row[1],'desc':row[2]})
+		row = cursor.fetchone()
+	data['overrides']=override
+	return json.dumps(data)
 	
 @app.route('/copy')
 def copy():
@@ -59,25 +73,32 @@ def copy():
 			for override_id in data.get('override_ids'):
 				for n in range(data.get('num_copy')):
 					copy_override.copy(source_coa_id = data.get('source_coa'),coa_id=coa_id, override_id=override_id, unique = data.get('unique'))
+		data['status'] = True
 	except Exception as e:
-		data['error']=str(e)
+		data['error'] = str(e)
+		data['status'] = False
 	#index_template = env.get_template('index.html')
-	return redirect('/confirm')
-
-@app.route('/confirm')
-def confirm():
-	confirm_template = env.get_template('confirm.html')
-	return confirm_template.render()
+	return json.dumps(data)
 
 @app.route('/commit')
 def commit():
-	copy_override.commit(correct=True)
-	return redirect('/')
+	data = dict()
+	try:
+		copy_override.commit(correct=True)
+		data['status']=True
+	except Exception as ex:
+		data['status']=False
+	return json.dumps(data)
 
 @app.route('/cancel')
 def cancel():
-	copy_override.commit(correct=False)
-	return redirect('/')
+	data=dict()
+	try:
+		copy_override.commit(correct=False)
+		data['status']=True
+	except Exception as ex:
+		data['status']=False
+	return json.dumps(data)
 
 @app.route('/search')
 def search_server():
