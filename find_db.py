@@ -1,8 +1,8 @@
+servers=['to1npvdfcsql0{}.dforce1.navisite.net'.format(x) for x in range(5)]
+servers.extend(['an2npvtstsql0{}.dforce1.navisite.net'.format(x) for x in range(5)])
 def get_server(database):
-	if not database: return ''
-	import pyodbc
-	servers=['to1npvdfcsql0{}.dforce1.navisite.net'.format(x) for x in range(5)]
-	servers.extend(['an2npvtstsql0{}.dforce1.navisite.net'.format(x) for x in range(5)])
+	if database: return ''
+	import pyodbc	
 	found_on_server = None
 	for server in servers:
 		try:

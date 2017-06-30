@@ -1,24 +1,26 @@
 <!doctype html>
 <html>
 	<head>
-		<title>Get Database</title>
+		<title>Copy Overrides</title>
 		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
 	</head>
 	<body>
 		<script src="https://unpkg.com/vue"></script>
 		<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+		<script src="https://use.fontawesome.com/7b1701d776.js"></script>
 		{% raw %}
 		<div class="container" id="app">
 			<div class="col-sm-8 col-sm-offset-2">
 				<h2>Copy Overrides</h2>
-				<p class="error">{{error}}</p>
+				<div v-if="error" class="alert alert-danger">{{error}}</div>
 				<div class="form-group">
 					<label>Server name: {{server}}</label>
-					<input type="text" class="form-control" name="server" v-model.trim="server">
+					<input type="text" class="form-control" name="server" v-model.trim="server" v-on:change="getCoas" :disabled="loading">
 				</div>
 				<div class="form-group">
 					<label>Database name: {{database}}</label>
-					<input type="text" class="form-control" name="database" v-model.trim="database" v-on:change="getCoas">
+					<input type="text" class="form-control" name="database" v-model.trim="database" v-on:change="getCoas" :disabled="loading">
 				</div>
 				<div v-if="coas.length > 0">
 					<label>Source Chart of account</label>
@@ -48,7 +50,6 @@
 							<td>{{coa.name}}</td>
 							<td>{{coa.desc}}</td>
 						</tr>
-						
 					</table>
 				</div>
 					
@@ -75,17 +76,27 @@
 				</div>
 				<div class="form-group">
 					<label>{{num_copy}} {{num_copy>1?'copies':'copy'}} of each override</label>
-					<input type="number" step="1" min="1" max="1" class="form-control" v-model="num_copy"/>
+					<input type="number" step="1" min="1" class="form-control" v-model="num_copy"/>
 				</div>
 				<p v-if="override_ids.length > 0">A total of {{ override_ids.length * num_copy}} override will be created</p>
-				<a class="btn btn-primary" v-on:click="copyOverrides" href="#" :disabled="!validated" >{{override_ids.length > 0 ? override_ids.length > 1 ? 'Copy ' + override_ids.length + ' overrides' : 'Copy 1 override' : 'No Overrides selected'}}</a>
+				
+				<button v-if="stage==1" class="btn btn-primary" @click="copyOverrides"  :disabled="loading || !validated" >
+					<i v-if="loading" class="fa fa-spinner fa-pulse fa-fw"></i>
+					{{override_ids.length > 0 ? override_ids.length > 1 ? 'Copy ' + override_ids.length + ' overrides' : 'Copy 1 override' : 'No Overrides selected'}}
+				</button>
+				<div v-else="stage==2" >
+					<div class="alert alert-info">Override copied</div>
+					<div class="alert alert-warning">Please verify the changes in instance and choose the right option</div>
+					<button @click="commitChanges" class="btn btn-success" :disabled="loading">Make them final</button>
+					<button @click="revertChanges" class="btn btn-danger" :disabled="loading">No no revert back all messed up!!</button>
+				</div>
 			</div>
 		</div>
 		{% endraw %}
 		<!-- Latest compiled and minified JavaScript -->
-		
-
 		<script>
+			var STAGE_COPY = 1
+			var STAGE_COMMIT = 2
 			var app = new Vue({
 			  el: '#app',
 			  data: {
@@ -101,9 +112,10 @@
 				override_ids: [],
 				
 				//for ui
-				
+				loading: false,
+				stage: STAGE_COPY,
 				//classes
-				success: 'success'
+				success: 'success',
 			  },
 			  computed:{
 				validated: function(){
@@ -125,10 +137,19 @@
 					this.dest_coa=''
 				},
 				getCoas: function(){
-					this.clearSelection()
-					
-					console.log('fetching coas')
 					var vm = this
+					if(vm.server == '' || vm.database == ''){
+						console.log('invalid values')
+						return
+					}
+					if(vm.loading){
+						console.log('fetching coa in progress')
+						return
+					}
+					console.log('fetching coas')
+					vm.loading = true
+					vm.clearSelection()
+					vm.error = ''
 					axios.get('/coa', {
 						params: {
 						  server: vm.server,
@@ -136,14 +157,20 @@
 						}
 					  })
 					  .then(function (response) {
-						console.log(response.data.coas)
-						vm.coas.splice(0,vm.coas.length)
-						response.data.coas.forEach(function(data){
-							vm.coas.push(data)
-						});
+						if(response.data.status){
+							console.log(response.data.coas)
+							vm.coas.splice(0,vm.coas.length)
+							response.data.coas.forEach(function(data){
+								vm.coas.push(data)
+							});
+						}else{
+							vm.error = response.data.error
+						}
+						vm.loading = false
 					  })
 					  .catch(function (error) {
 						console.log(error)
+						vm.loading = false
 					  });
 				},
 				getOverrideByCoa: function(coa_id){
@@ -156,6 +183,8 @@
 					var vm=this
 					axios.get('/overrides',{
 						params:{
+							server: vm.server,
+							database: vm.database,
 							coa_id: vm.source_coa
 						}
 					})
@@ -182,23 +211,67 @@
 				copyOverrides: function(){
 					console.log('coping..')
 					var vm = this
+					vm.loading = true
 					axios.get('/copy',{
 						params:{
 							server: vm.server,
 							database: vm.database,
 							source_coa: vm.source_coa,
-							destination_coas: vm,dest_coa,
-							override_ids: vm.override_ids.join(', '),
+							destination_coas: vm.dest_coa,
+							override_ids: vm.override_ids.join(','),
 							unique: vm.unique,
 							num_copy: vm.num_copy
 						}
 					})
 					.then(function (response){
 						console.log(response.data)
+						if(response.data.status){
+							vm.stage = STAGE_COMMIT
+						}else{
+							vm.error = 'failed to copy overrides, try again'
+						}
+						vm.loading = false
 						//TOOD: change ui to show confirm and revert buttons
 					})
 					.catch(function (error){
 						console.log(error)
+						vm.loading = false
+					})
+				},
+				commitChanges: function(){
+					var vm = this
+					vm.loading=true
+					axios.get('/commit')
+					.then(function (response){
+						console.log(response)
+						if(response.data.status){
+							vm.stage = STAGE_COPY
+						}else{
+							//fail to commit
+							vm.error = 'error commiting changes| try again'
+						}
+						vm.loading=false
+					}).catch(function (error){
+						console.log(error)
+						vm.error=error
+						vm.loading=false
+					})
+				},
+				revertChanges: function(){
+					var vm = this
+					axios.get('/cancel')
+					.then(function (response){
+						console.log(response)
+						if(response.data.status){
+							vm.stage = STAGE_COPY
+						}else{
+							vm.error = 'error reverting changes| try again'
+						}
+						vm.loading=false
+					}).catch(function (error){
+						console.log(error)
+						vm.error=error
+						vm.loading=false
 					})
 				}
 			  }
