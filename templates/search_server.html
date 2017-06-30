@@ -1,28 +1,75 @@
 <!doctype html>
 <html>
 	<head>
-		<title>Get Database</title>
+		<title>find Server</title>
 		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 	</head>
 	<body>
-		<div class="container">
+	{% raw %}
+		<div class="container" id="app">
 			<div class="col-sm-6 col-sm-offset-3">
-				<h2>Find Server</h2>
-				<h3>{{server}}</h3>
-				<p>{{error}}</p>
-				<form action="/search" method="get">
+				<h2>Find Server <i v-if="loading" class="fa fa-spinner fa-pulse fa-fw"></i></h2>
+				<h3 v-if="server">found in: {{server}}</h3>
+				<p v-if="error" class="alert alert-danger">{{error}}</p>
+				
 					<div class="form-group">
-						<label>Database name</label>
-						<input type="text" class="form-control" name="database" value="{{database}}"/>
+						<label>{{message}}</label>
+						<input type="text" class="form-control" name="database" v-model.trim="database"/>
 					</div>
-					
-					<div class="form-group">
-						<button type="submit" class="btn btn-primary">Search</button>
-					</div>
-				</form>
 			</div>
 		</div>
+	{% endraw %}
 		<!-- Latest compiled and minified JavaScript -->
-		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+		<script src="https://unpkg.com/vue"></script>
+		<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+		<script src="https://use.fontawesome.com/7b1701d776.js"></script>
+		<script src="https://cdn.jsdelivr.net/lodash/4.13.1/lodash.js"></script>
+		<script>
+			
+			var app = new Vue({
+				el: '#app',
+				data: {
+					database: 'enter database to find server',
+					server: '',
+					error: '',
+					//for ui 
+					loading: false,
+					dirty: false,
+				},
+				methods:{
+					getDatabase: _.debounce(function() {
+						var vm = this
+						vm.dirty = false
+						vm.loading = true
+						axios.get('/findServer',{
+							database: vm.database
+						})
+						.then(function (response){
+							console.log(response)
+							vm.server = response.data.server
+							vm.loading=false
+						})
+						.catch(function (error){
+							console.log(error)
+							vm.error=error
+							vm.loading=false
+						})
+					},900)
+				},
+				watch:{
+					database: function(){
+						this.dirty = true
+						this.getDatabase()
+					}
+				},
+				computed:{
+					message: function(){
+						if(this.loading) return 'searching server'
+						if(this.dirty) return 'waiting for you to stop typing..'
+						return ''
+					}
+				},
+			})
+		</script>
 	</body>
 </html>

@@ -50,7 +50,7 @@ def get_override_id(**kawrs):
 		print 'no override matching this criteria found'
 		return None
 		
-def copy(source_coa_id=None,coa_id=None,override_id=None, unique=6):
+def copy(source_coa_id=None,coa_id=None,override_id=None, unique=6,num_copies=1):
 
 	if source_coa_id is None or coa_id is None or override_id is None:
 		raise ValueError('required values source_coa_id, coa_id and override_id not passed')
@@ -58,100 +58,101 @@ def copy(source_coa_id=None,coa_id=None,override_id=None, unique=6):
 		raise ValueError('unique value must be name or description')
 	
 	unique = int(unique)
-	#insert into PRGLmappingaccount (PRGLOverrideMappingId, IsAccrualFollowsCurrent, XrefCode, ClientId, LastModifiedUserId, LastModifiedTimestamp, ShortName, LongName, SortOrder) \
-	new_override_name_suffix = '' if int(coa_id) != int(source_coa_id) else ' - copy'
-	coa_id = str(coa_id)
-	cursor.execute('select PRGLOverrideMappingId, IsAccrualFollowsCurrent, XrefCode, ClientId, LastModifiedUserId, LastModifiedTimestamp, ShortName, LongName, SortOrder from PRGLMappingAccount \
-	where PRGLMappingAccountId=?', [override_id])
-	
-	insert_query='insert into PRGLMappingAccount(PRGLOverrideMappingId, IsAccrualFollowsCurrent, XrefCode, ClientId, LastModifiedUserId, LastModifiedTimestamp, ShortName, LongName, SortOrder) values\
-	('+coa_id+',?,?,?,?,?,?,?,?)'
-	
-	row=cursor.fetchone()
-	new_shortname=''
-	#6 shortname 7 longname
-	if row:
-		row=list(row)
-		new_shortname=row[unique] + new_override_name_suffix
-		row[unique]=new_shortname
-		row=row[1:]
-		cursor.execute(insert_query,row)
-		print 'inserted\n'+str(row)
-	else:
-		print 'no override with id',override_id
-		return
-	if unique == 6:
-		new_override_id = get_override_id(shortname=new_shortname, coa_id=coa_id)
-	elif unique == 7:
-		new_override_id = get_override_id(longname=new_shortname, coa_id=coa_id)
-	
-	if not new_override_id: raise ValueError('unable to get primary key of newly created override')
-	
-	select_lineitems='select * from PRGLMappingAccountElementValue where PRGLmappingaccountID=?'
-	cursor.execute(select_lineitems,[override_id])
-	
-	item=None
-	insert_item_query='insert into PRGLMappingAccountElementValue (PRGLMappingAccountId, DFElementParamId, Value, ClientId, LastModifiedUserId, LastModifiedTimestamp) values '
-	insert_item_query_2='(?,?,?,?,?,?),'
-	insert_item_query_values=[]
-	haveSome=False
-	while True:
+	for copy_no in range(1,num_copies+1):
+		#insert into PRGLmappingaccount (PRGLOverrideMappingId, IsAccrualFollowsCurrent, XrefCode, ClientId, LastModifiedUserId, LastModifiedTimestamp, ShortName, LongName, SortOrder) \
+		new_override_name_suffix = ' -copy'+str(copy_no)
+		coa_id = str(coa_id)
+		cursor.execute('select PRGLOverrideMappingId, IsAccrualFollowsCurrent, XrefCode, ClientId, LastModifiedUserId, LastModifiedTimestamp, ShortName, LongName, SortOrder from PRGLMappingAccount \
+		where PRGLMappingAccountId=?', [override_id])
+		
+		insert_query='insert into PRGLMappingAccount(PRGLOverrideMappingId, IsAccrualFollowsCurrent, XrefCode, ClientId, LastModifiedUserId, LastModifiedTimestamp, ShortName, LongName, SortOrder) values\
+		('+coa_id+',?,?,?,?,?,?,?,?)'
+		
 		row=cursor.fetchone()
-		if not row:
-			break;
-		haveSome=True
-		item=list(row[1:])
-		item[0]=new_override_id		
-		insert_item_query_values.append(item)
-		insert_item_query += insert_item_query_2
-		print item
-	if haveSome:
-		insert_item_query=insert_item_query[:-1] # remove etra comma at the end
-		cursor.execute(insert_item_query,sum(insert_item_query_values,[]))
-	
-	#selecting criterias
-	select_criteria='select * from PRGLCriteria where PRGLMappingAccountId=?'
-	cursor.execute(select_criteria,[override_id])
-	insert_item_query='insert into PRGLCriteria (PRGLCriteriaSourceId, PRGLCriteriaSourceObjectId, IsGrouping, PRGLCriteriaParameterId, PRGLMappingAccountId, PRGLCriteriaFilterId, Value, ClientId, LastModifiedUserId, LastModifiedTimestamp, PRGLCriteriaTokenObjectId)\
-		values '
-	insert_item_query_2='(?,?,?,?,?,?,?,?,?,?,?),'
-	insert_item_query_values=[]
-	haveSome=False
-	while True:
-		row=cursor.fetchone()
-		if not row:
-			break;
-		haveSome=True
-		item=list(row[1:])
-		item[4]=new_override_id		
-		insert_item_query_values.append(item)
-		insert_item_query += insert_item_query_2
-		print item
-	if haveSome:
-		insert_item_query=insert_item_query[:-1] # remove etra comma at the end
-		cursor.execute(insert_item_query,sum(insert_item_query_values,[]))
-	
-	#inserting end overrides PRGLOverrideAssignment
-	select_overrides=' select * from PRGLOverrideAssignment where PRGLMappingAccountId=?'
-	cursor.execute(select_overrides,[override_id])
-	insert_item_query='insert into PRGLOverrideAssignment (PRGLSegmentTypeId, PRGLSegmentTypeObjectId, PRGLMappingAccountId, PayrollDebitTypeId, PayrollDebitValue, PayrollCreditTypeId, PayrollCreditValue, AccrualTypeId, AccrualValue, AccrualOffsetTypeId, AccrualOffsetValue, ClientId, LastModifiedUserId, LastModifiedTimestamp)\
-		values '
-	insert_item_query_2='(?,?,?,?,?,?,?,?,?,?,?,?,?,?),'
-	insert_item_query_values=[]
-	haveSome=False
-	while True:
-		row=cursor.fetchone()
-		if not row:
-			break;
-		haveSome=True
-		item=list(row[1:])
-		item[2]=new_override_id
-		insert_item_query_values.append(item)
-		insert_item_query += insert_item_query_2		
-		print item
-	if haveSome:
-		insert_item_query=insert_item_query[:-1] # remove etra comma at the end
-		cursor.execute(insert_item_query,sum(insert_item_query_values,[]))	
+		new_shortname=''
+		#6 shortname 7 longname
+		if row:
+			row=list(row)
+			new_shortname=row[unique] + new_override_name_suffix
+			row[unique]=new_shortname
+			row=row[1:]
+			cursor.execute(insert_query,row)
+			print 'inserted\n'+str(row)
+		else:
+			print 'no override with id',override_id
+			return
+		if unique == 6:
+			new_override_id = get_override_id(shortname=new_shortname, coa_id=coa_id)
+		elif unique == 7:
+			new_override_id = get_override_id(longname=new_shortname, coa_id=coa_id)
+		
+		if not new_override_id: raise ValueError('unable to get primary key of newly created override')
+		
+		select_lineitems='select * from PRGLMappingAccountElementValue where PRGLmappingaccountID=?'
+		cursor.execute(select_lineitems,[override_id])
+		
+		item=None
+		insert_item_query='insert into PRGLMappingAccountElementValue (PRGLMappingAccountId, DFElementParamId, Value, ClientId, LastModifiedUserId, LastModifiedTimestamp) values '
+		insert_item_query_2='(?,?,?,?,?,?),'
+		insert_item_query_values=[]
+		haveSome=False
+		while True:
+			row=cursor.fetchone()
+			if not row:
+				break;
+			haveSome=True
+			item=list(row[1:])
+			item[0]=new_override_id		
+			insert_item_query_values.append(item)
+			insert_item_query += insert_item_query_2
+			print item
+		if haveSome:
+			insert_item_query=insert_item_query[:-1] # remove etra comma at the end
+			cursor.execute(insert_item_query,sum(insert_item_query_values,[]))
+		
+		#selecting criterias
+		select_criteria='select * from PRGLCriteria where PRGLMappingAccountId=?'
+		cursor.execute(select_criteria,[override_id])
+		insert_item_query='insert into PRGLCriteria (PRGLCriteriaSourceId, PRGLCriteriaSourceObjectId, IsGrouping, PRGLCriteriaParameterId, PRGLMappingAccountId, PRGLCriteriaFilterId, Value, ClientId, LastModifiedUserId, LastModifiedTimestamp, PRGLCriteriaTokenObjectId)\
+			values '
+		insert_item_query_2='(?,?,?,?,?,?,?,?,?,?,?),'
+		insert_item_query_values=[]
+		haveSome=False
+		while True:
+			row=cursor.fetchone()
+			if not row:
+				break;
+			haveSome=True
+			item=list(row[1:])
+			item[4]=new_override_id		
+			insert_item_query_values.append(item)
+			insert_item_query += insert_item_query_2
+			print item
+		if haveSome:
+			insert_item_query=insert_item_query[:-1] # remove etra comma at the end
+			cursor.execute(insert_item_query,sum(insert_item_query_values,[]))
+		
+		#inserting end overrides PRGLOverrideAssignment
+		select_overrides=' select * from PRGLOverrideAssignment where PRGLMappingAccountId=?'
+		cursor.execute(select_overrides,[override_id])
+		insert_item_query='insert into PRGLOverrideAssignment (PRGLSegmentTypeId, PRGLSegmentTypeObjectId, PRGLMappingAccountId, PayrollDebitTypeId, PayrollDebitValue, PayrollCreditTypeId, PayrollCreditValue, AccrualTypeId, AccrualValue, AccrualOffsetTypeId, AccrualOffsetValue, ClientId, LastModifiedUserId, LastModifiedTimestamp)\
+			values '
+		insert_item_query_2='(?,?,?,?,?,?,?,?,?,?,?,?,?,?),'
+		insert_item_query_values=[]
+		haveSome=False
+		while True:
+			row=cursor.fetchone()
+			if not row:
+				break;
+			haveSome=True
+			item=list(row[1:])
+			item[2]=new_override_id
+			insert_item_query_values.append(item)
+			insert_item_query += insert_item_query_2		
+			print item
+		if haveSome:
+			insert_item_query=insert_item_query[:-1] # remove etra comma at the end
+			cursor.execute(insert_item_query,sum(insert_item_query_values,[]))	
 	#cursor.commit()
 
 def commit(correct=True):
