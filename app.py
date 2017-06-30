@@ -9,8 +9,6 @@ import pyodbc
 
 app = Flask(__name__)
 
-cursor=None
-
 
 env = Environment(
     loader=PackageLoader('app', 'templates'),
@@ -25,19 +23,23 @@ def index():
 
 @app.route('/coa')
 def get_coa():
-	global cursor
 	data=dict()
 	data['server'] = request.args.get('server')
 	data['database'] = request.args.get('database')
-	cnxn = pyodbc.connect(r'Driver={SQL Server};Server='+data.get('server')+';Database='+data.get('database')+';Trusted_Connection=yes;')
-	cursor = cnxn.cursor()
-	cursor.execute('select PRGLOverrideMappingId, Shortname, Longname from PRGLOverrideMapping')
-	coas=[]
-	row = cursor.fetchone()
-	while row:
-		coas.append({'id':row[0],'name':row[1],'desc':row[2]})
+	try:
+		cnxn = pyodbc.connect(r'Driver={SQL Server};Server='+data.get('server')+';Database='+data.get('database')+';Trusted_Connection=yes;')
+		cursor = cnxn.cursor()
+		cursor.execute('select PRGLOverrideMappingId, Shortname, Longname from PRGLOverrideMapping')
+		coas=[]
 		row = cursor.fetchone()
-	data['coas'] = coas
+		while row:
+			coas.append({'id':row[0],'name':row[1],'desc':row[2]})
+			row = cursor.fetchone()
+		data['coas'] = coas
+		data['status'] = True
+	except Exception as ex:
+		data['error'] = str(ex)
+		data['status'] = False
 	return json.dumps(data)
 
 @app.route('/overrides')
@@ -45,6 +47,10 @@ def get_overrides():
 	global cursor
 	data=dict()
 	data['coa_id'] = request.args.get('coa_id')
+	data['server'] = request.args.get('server')
+	data['database'] = request.args.get('database')
+	cnxn = pyodbc.connect(r'Driver={SQL Server};Server='+data.get('server')+';Database='+data.get('database')+';Trusted_Connection=yes;')
+	cursor = cnxn.cursor()
 	cursor.execute('select PRGLMappingAccountId, shortname, longname from PRGLMappingAccount where PRGLOverrideMappingId='+data.get('coa_id','-1'))
 	override=[]
 	row=cursor.fetchone()
@@ -60,8 +66,8 @@ def copy():
 	data['server'] = request.args.get('server')
 	data['database'] = request.args.get('database')
 	data['source_coa'] = request.args.get('source_coa')
-	data['destination_coas'] = parse_list(request.args.get('destination_coa'))
-	data['override_ids'] = parse_list(request.args.get('override_ids'))
+	data['destination_coas'] = parse_list(str(request.args.get('destination_coas')))
+	data['override_ids'] = parse_list(str(request.args.get('override_ids')))
 	data['unique'] = int(request.args.get('unique'))
 	data['num_copy'] = int(request.args.get('num_copy',1))
 	#data['server'] = find_db.get_server(data.get('database',None))
@@ -71,10 +77,11 @@ def copy():
 	try:
 		for coa_id in data.get('destination_coas'):
 			for override_id in data.get('override_ids'):
-				for n in range(data.get('num_copy')):
-					copy_override.copy(source_coa_id = data.get('source_coa'),coa_id=coa_id, override_id=override_id, unique = data.get('unique'))
+				print 'copying..'
+				copy_override.copy(source_coa_id = data.get('source_coa'),coa_id=coa_id, override_id=override_id, unique = data.get('unique'), num_copies = data.get('num_copy'))
 		data['status'] = True
 	except Exception as e:
+		cursor.rollback()
 		data['error'] = str(e)
 		data['status'] = False
 	#index_template = env.get_template('index.html')
@@ -102,14 +109,17 @@ def cancel():
 
 @app.route('/search')
 def search_server():
+	return env.get_template('search_server.html').render()
+
+@app.route('/findServer')
+def find_server():
 	data = dict()
 	data['database'] = request.args.get('database','')
-	if 'database' in data.keys(): 
-		data['server'] = find_db.get_server(data.get('database',''))
-	server_template = env.get_template('search_server.html')
-	return server_template.render(data)
-
+	data['server'] = find_db.get_server(data.get('database',''))
+	return json.dumps(data)
+	
 def parse_list(string):
+
 	return filter(lambda x: x != '' , map(lambda x: str(x),re.split(',|, | ',string)))
 
 if __name__=='__main__': app.run()
